@@ -38,7 +38,7 @@ namespace MarketConnectors.FeedOS
         public FeedOSPlugin()
         {
             _connection = new Connection();
-            Env.Load("C:\\Users\\safay\\Documents\\codespace\\git\\VisualHFT\\VisualHFT.Plugins\\MarketConnectors.FeedOS\\.env");
+            Env.Load();
             _orderBookMapper = new FeedosOrderBookMapper();
         }
 
@@ -91,8 +91,12 @@ namespace MarketConnectors.FeedOS
 
         private void SubscribeToL2()
         {
-            List<string> instruments = _settings.Instruments;
-            Console.WriteLine(_settings.Instruments);
+            string symbol = _settings.Symbol;
+
+            List<string> instruments = new List<string> { symbol };
+
+            /*            Console.WriteLine(_settings.Instruments);
+            */
             _connection.SubscribeL2(instruments, false, (uint)_settings.RequestId);
 
             _connection.OrderBookSnapshotsHandler += OrderBookSnapshotsHandler;
@@ -106,7 +110,9 @@ namespace MarketConnectors.FeedOS
             _connection.OrderBookRefreshHandler -= OrderBookRefreshHandler;
             _connection.OrderBookDeltaRefreshHandler -= OrderBookDeltaRefreshHandler;
 
-            List<string> instruments = _settings.Instruments;
+            string symbol = _settings.Symbol;
+            List<string> instruments = new List<string> { symbol };
+
             _connection.SubscribeL2Remove(instruments, (uint)_settings.RequestId);
         }
 
@@ -195,6 +201,7 @@ namespace MarketConnectors.FeedOS
             if (_settings.HostIP == "localhost")
             {
                 _settings.HostIP = Env.GetString("HOST_IP");
+                _settings.Symbol = Env.GetString("INSTRUMENT_NAME");
             }
         }
 
@@ -227,6 +234,7 @@ namespace MarketConnectors.FeedOS
             viewModel.Port = (int)_settings.Port;
             viewModel.Username = _settings.Username;
             viewModel.Password = _settings.Password;
+            viewModel.Symbol = _settings.Symbol;
             viewModel.RequestId = (int)_settings.RequestId;
 
             viewModel.UpdateSettingsFromUI = () =>
@@ -236,6 +244,7 @@ namespace MarketConnectors.FeedOS
                 _settings.Username = viewModel.Username;
                 _settings.Password = viewModel.Password;
                 _settings.RequestId = viewModel.RequestId;
+                _settings.Symbol = viewModel.Symbol;
                 SaveSettings();
                 Task.Run(HandleConnectionLost);
             };

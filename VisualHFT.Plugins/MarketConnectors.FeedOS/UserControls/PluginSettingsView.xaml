@@ -26,8 +26,8 @@
             <TextBox Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}" />
 
             <!-- Input for a single instrument -->
-            <Label Content="Instrument"/>
-            <TextBox Text="{Binding Instrument, UpdateSourceTrigger=PropertyChanged}" Margin="0,5" />
+            <Label Content="Symbol"/>
+            <TextBox Text="{Binding Symbol, UpdateSourceTrigger=PropertyChanged}" Margin="0,5" />
 
             <Label Content="Request ID"/>
             <TextBox Text="{Binding RequestId, UpdateSourceTrigger=PropertyChanged}" />
