@@ -1,10 +1,8 @@
 ﻿using DotNetEnv;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using VisualHFT.Commons.PluginManager;
 using VisualHFT.DataRetriever;
 using VisualHFT.UserSettings;
@@ -18,10 +16,6 @@ using System.Threading;
 using FeedOSAPI;
 using FeedOSManaged;
 using FeedOSAPI.Types;
-using System.Diagnostics.Metrics;
-using System.Data.Common;
-using System.Reflection;
-using System.Runtime;
 
 namespace MarketConnectors.FeedOS
 {
@@ -30,31 +24,22 @@ namespace MarketConnectors.FeedOS
         private bool _disposed = false;
         private PlugInSettings _settings;
         private Connection _connection;
+        private Dictionary<string, VisualHFT.Model.OrderBook> _localOrderBooks = new Dictionary<string, VisualHFT.Model.OrderBook>();
+        private FeedosOrderBookMapper _orderBookMapper;
 
         public override string Name { get; set; } = "FeedOS Plugin";
         public override string Version { get; set; } = "1.0.0";
-        public override string Description { get; set; } = "Connects to FeedOS API and retrieves MBL data.";
+        public override string Description { get; set; } = "Connects to FeedOS API and retrieves L2 data.";
         public override string Author { get; set; } = "VisualHFT";
         public override ISetting Settings { get => _settings; set => _settings = (PlugInSettings)value; }
         public override Action CloseSettingWindow { get; set; }
-
-        // Orderbooks
-        private Dictionary<string, VisualHFT.Model.OrderBook> _localOrderBooks = new Dictionary<string, VisualHFT.Model.OrderBook>();
-        private Dictionary<string, CancellationTokenSource> _ctDeltas = new Dictionary<string, CancellationTokenSource>();
-        private Dictionary<string, CancellationTokenSource> _ctTrades = new Dictionary<string, CancellationTokenSource>();
-        private Dictionary<string, long> _localOrderBooks_LastUpdate = new Dictionary<string, long>();
-        private Timer _heartbeatTimer;
-        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
-        private readonly ObjectPool<VisualHFT.Model.Trade> tradePool = new ObjectPool<VisualHFT.Model.Trade>();//pool of Trade objects
-        private DataEventArgs tradeDataEvent = new DataEventArgs() { DataType = "Trades" }; //reusable object. So we avoid allocations
-        private DataEventArgs marketDataEvent = new DataEventArgs() { DataType = "Market" };//reusable object. So we avoid allocations
-        private DataEventArgs heartbeatDataEvent = new DataEventArgs() { DataType = "HeartBeats" };//reusable object. So we avoid allocations
+        private DataEventArgs marketDataEvent = new DataEventArgs() { DataType = "Market" };
 
         public FeedOSPlugin()
         {
             _connection = new Connection();
-            Env.Load();
-
+            Env.Load("C:\\Users\\safay\\Documents\\codespace\\git\\VisualHFT\\VisualHFT.Plugins\\MarketConnectors.FeedOS\\.env");
+            _orderBookMapper = new FeedosOrderBookMapper();
         }
 
         public override async Task StartAsync()
@@ -62,7 +47,7 @@ namespace MarketConnectors.FeedOS
             try
             {
                 ConnectToFeedOS();
-                await Task.Delay(1000);
+                SubscribeToL2();
                 await base.StartAsync();
             }
             catch (Exception ex)
@@ -76,6 +61,7 @@ namespace MarketConnectors.FeedOS
         {
             try
             {
+                UnsubscribeFromL2();
                 DisconnectFromFeedOS();
                 await base.StopAsync();
             }
@@ -93,8 +79,7 @@ namespace MarketConnectors.FeedOS
             uint result = _connection.Connect(_settings.HostIP, (uint)_settings.Port, _settings.Username, _settings.Password);
             if (result != 0)
             {
-                throw new Exception($"Error connecting to FeedOS server: {API.ErrorString(result)} using this cred: {_settings.HostIP}" +
-                    $"{(uint)_settings.Port}" + $"{_settings.Username}");
+                throw new Exception($"Error connecting to FeedOS server: {API.ErrorString(result)}");
             }
         }
 
@@ -103,11 +88,89 @@ namespace MarketConnectors.FeedOS
             _connection?.Disconnect();
             FeedOSManaged.API.Shutdown();
         }
-        /*private void RaiseMarketDataEvent(VisualHFT.Model.OrderBook orderBook)
+
+        private void SubscribeToL2()
         {
-            marketDataEvent.Data = orderBook;
-            RaiseOnData(marketDataEvent);
-        }*/
+            List<string> instruments = _settings.Instruments;
+            Console.WriteLine(_settings.Instruments);
+            _connection.SubscribeL2(instruments, false, (uint)_settings.RequestId);
+
+            _connection.OrderBookSnapshotsHandler += OrderBookSnapshotsHandler;
+            _connection.OrderBookRefreshHandler += OrderBookRefreshHandler;
+            _connection.OrderBookDeltaRefreshHandler += OrderBookDeltaRefreshHandler;
+        }
+
+        private void UnsubscribeFromL2()
+        {
+            _connection.OrderBookSnapshotsHandler -= OrderBookSnapshotsHandler;
+            _connection.OrderBookRefreshHandler -= OrderBookRefreshHandler;
+            _connection.OrderBookDeltaRefreshHandler -= OrderBookDeltaRefreshHandler;
+
+            List<string> instruments = _settings.Instruments;
+            _connection.SubscribeL2Remove(instruments, (uint)_settings.RequestId);
+        }
+
+        private void OrderBookSnapshotsHandler(uint requestId, List<InstrumentStatusL2> instrumentStatuses)
+        {
+            foreach (var instrumentStatus in instrumentStatuses)
+            {
+                string normalizedSymbol = GetNormalizedSymbol(instrumentStatus.InstrumentCode);
+                FeedOSAPI.Types.OrderBook orderBook = instrumentStatus.OrderBook;
+                UpdateLocalOrderBook(normalizedSymbol, orderBook, instrumentStatus.InstrumentCode);
+            }
+        }
+
+        private void OrderBookRefreshHandler(uint requestId, uint instrumentCode, ValueType serverUTCDateTime, OrderBookRefresh orderBookRefresh)
+        {
+            string normalizedSymbol = GetNormalizedSymbol(instrumentCode);
+            UpdateLocalOrderBook(normalizedSymbol, orderBookRefresh);
+        }
+
+        private void OrderBookDeltaRefreshHandler(uint requestId, uint instrumentCode, ValueType serverUTCDateTime, OrderBookDeltaRefresh orderBookDeltaRefresh)
+        {
+            string normalizedSymbol = GetNormalizedSymbol(instrumentCode);
+            UpdateLocalOrderBook(normalizedSymbol, orderBookDeltaRefresh);
+        }
+
+        private void UpdateLocalOrderBook(string normalizedSymbol, FeedOSAPI.Types.OrderBook orderBook, uint instrumentCode)
+        {
+            VisualHFT.Model.OrderBook visualHFTOrderBook = _orderBookMapper.MapOrderBook(orderBook, instrumentCode);
+            _localOrderBooks[normalizedSymbol] = visualHFTOrderBook;
+            RaiseOrderBookEvent(normalizedSymbol);
+        }
+        private void UpdateLocalOrderBook(string normalizedSymbol, OrderBookRefresh orderBookRefresh)
+        {
+            if (_localOrderBooks.ContainsKey(normalizedSymbol))
+            {
+                VisualHFT.Model.OrderBook visualHFTOrderBook = _orderBookMapper.UpdateOrderBook(_localOrderBooks[normalizedSymbol], orderBookRefresh);
+                _localOrderBooks[normalizedSymbol] = visualHFTOrderBook;
+                RaiseOrderBookEvent(normalizedSymbol);
+            }
+        }
+
+        private void UpdateLocalOrderBook(string normalizedSymbol, OrderBookDeltaRefresh orderBookDeltaRefresh)
+        {
+            if (_localOrderBooks.ContainsKey(normalizedSymbol))
+            {
+                VisualHFT.Model.OrderBook visualHFTOrderBook = _orderBookMapper.UpdateOrderBook(_localOrderBooks[normalizedSymbol], orderBookDeltaRefresh);
+                _localOrderBooks[normalizedSymbol] = visualHFTOrderBook;
+                RaiseOrderBookEvent(normalizedSymbol);
+            }
+        }
+
+        private void RaiseOrderBookEvent(string normalizedSymbol)
+        {
+            if (_localOrderBooks.ContainsKey(normalizedSymbol))
+            {
+                marketDataEvent.ParsedModel = new List<VisualHFT.Model.OrderBook> { _localOrderBooks[normalizedSymbol] };
+                RaiseOnDataReceived(marketDataEvent);
+            }
+        }
+
+        private string GetNormalizedSymbol(uint instrumentCode)
+        {
+            return instrumentCode.ToString();
+        }
 
         protected override void Dispose(bool disposing)
         {
@@ -144,11 +207,12 @@ namespace MarketConnectors.FeedOS
         {
             _settings = new PlugInSettings()
             {
-                HostIP =  Env.GetString("HOST_IP"),
-                Port =  Env.GetInt("PORT"),
+                HostIP = Env.GetString("HOST_IP"),
+                Port = Env.GetInt("PORT"),
                 Username = Env.GetString("USERNAME"),
                 Password = Env.GetString("PASSWORD"),
                 RequestId = 0,
+                //Symbol = Env.GetString("INSTRUMENT_NAME"),
                 Symbol = Env.GetString("INSTRUMENT_NAME"),
                 Provider = new VisualHFT.Model.Provider { ProviderID = 1, ProviderName = "FeedOS" }
             };
