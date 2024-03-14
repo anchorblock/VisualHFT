@@ -24,6 +24,8 @@ namespace MarketConnectors.FeedOS.ViewModel
         }
 
         private bool _isConnected;
+        private string _symbol;
+
         public bool IsConnected
         {
             get { return _isConnected; }
@@ -62,11 +64,11 @@ namespace MarketConnectors.FeedOS.ViewModel
         }
 
         // Change Instruments property to a single string
-        private string _instrument;
-        public string Instrument
+        /*    private string _instrument;*/
+        public string Symbol
         {
-            get => _instrument;
-            set { _instrument = value; OnPropertyChanged(nameof(Instrument)); }
+            get => _symbol;
+            set { _symbol = value; OnPropertyChanged(nameof(Symbol)); }
         }
 
         public VisualHFT.Model.Provider Provider

@@ -9,7 +9,7 @@ namespace MarketConnectors.FeedOS.Model
     public class PlugInSettings : ISetting
     {
         // Implementing the ISetting interface
-        public string Symbol
+        /*public string Symbol
         {
             get { return Instruments.FirstOrDefault(); }
             set
@@ -33,7 +33,7 @@ namespace MarketConnectors.FeedOS.Model
                     }
                 }
             }
-        }
+        }*/
 
         // Additional properties for your specific implementation
         public string HostIP { get; set; }
@@ -42,16 +42,16 @@ namespace MarketConnectors.FeedOS.Model
         public string Password { get; set; }
         public int RequestId { get; set; }
 
-        public List<string> Instruments { get; }
+        public string Symbol { get; set; }
 
         // Implementing the rest of the interface
         public Provider Provider { get; set; }
         public AggregationLevel AggregationLevel { get; set; }
 
-        public PlugInSettings()
+        /*public PlugInSettings()
         {
             // Initialize Instruments property
             Instruments = new List<string>();
-        }
+        }*/
     }
 }
