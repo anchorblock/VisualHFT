@@ -6,7 +6,7 @@
 *.user
 *.userosscache
 *.sln.docstates
-
+.env
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -261,3 +261,5 @@ __pycache__/
 *.pyc
 /App.config
 /VisualHFT.csproj.bak
+VisualHFT.Plugins/MarketConnectors.FeedOS/FeedOSPlugin - Copy.cs
+VisualHFT.Plugins/MarketConnectors.FeedOS/FeedOSPlugin_temp.cs
