@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net7.0-windows</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<Nullable>enable</Nullable>
+
+	</PropertyGroup>
+
+
+	<ItemGroup>
+		<PackageReference Include="DotNetEnv" Version="3.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\VisualHFT.Commons\VisualHFT.Commons.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="FeedOSAPI_vs2017">
+			<HintPath>..\..\feedos_dlls\bin\Debug\FeedOSAPI_vs2017.dll</HintPath>
+		</Reference>
+		<Reference Include="FeedOS_Managed_vs2017">
+			<HintPath>..\..\feedos_dlls\bin\Debug\FeedOS_Managed_vs2017.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+
+</Project>

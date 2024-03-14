@@ -1,3 +1,8 @@
+# Important Notes
+
+- Add a `.env` file into the `VisualHFT.Plugins\MarketConnectors.FeedOS/` directory
+- Add FeedOS dependencies from the `feedos_dlls\bin` directory
+
 # Release Notes
 See details [here](#release-notes-1)
 
